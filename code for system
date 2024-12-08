@@ -1,0 +1,178 @@
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <iomanip> // For formatted output
+
+using namespace std;
+
+class Bank {
+private:
+    string name, cellNo, address, email, password;
+    int balance = 0;
+    vector<string> transactionHistory;
+
+    // Helper function to encrypt passwords (basic XOR encryption for demonstration)
+    string encryptPassword(const string& pwd) {
+        string encrypted = pwd;
+        for (char& c : encrypted) c ^= 0x5A; // XOR with a key
+        return encrypted;
+    }
+
+    // Helper function to decrypt passwords
+    string decryptPassword(const string& pwd) {
+        return encryptPassword(pwd); // XOR again decrypts
+    }
+
+    void saveToFile() {
+        ofstream outFile("users.txt", ios::app);
+        outFile << name << " " << encryptPassword(password) << " " << cellNo
+                << " " << address << " " << email << endl;
+        outFile.close();
+    }
+
+public:
+    void createProfile() {
+        cout << "******************* Welcome to ThebeBank *****************" << endl;
+        cout << "Please enter your name: ";
+        cin >> name;
+        cout << "Please enter your cell number: ";
+        cin >> cellNo;
+        cout << "Please enter your address: ";
+        cin.ignore(); // To ignore leftover newline
+        getline(cin, address);
+        cout << "Please enter your email: ";
+        cin >> email;
+        cout << "Please enter your password: ";
+        cin >> password;
+
+        saveToFile();
+        cout << "Details saved successfully!\n";
+    }
+
+    bool userLogin() {
+        string inputName, inputPassword;
+        cout << "Enter your username: ";
+        cin >> inputName;
+        cout << "Enter your password: ";
+        cin >> inputPassword;
+
+        ifstream inFile("users.txt");
+        string fileName, filePassword, fileCell, fileAddress, fileEmail;
+        bool isLoggedIn = false;
+
+        while (inFile >> fileName >> filePassword >> fileCell >> fileAddress >> fileEmail) {
+            if (fileName == inputName && decryptPassword(filePassword) == inputPassword) {
+                name = fileName;
+                cellNo = fileCell;
+                address = fileAddress;
+                email = fileEmail;
+                isLoggedIn = true;
+                break;
+            }
+        }
+        inFile.close();
+
+        if (isLoggedIn) {
+            cout << "Login successful. Welcome, " << name << "!\n";
+        } else {
+            cout << "Invalid username or password.\n";
+        }
+        return isLoggedIn;
+    }
+
+    void menu() {
+        int choice;
+        do {
+            cout << "\n********* MAIN MENU *********\n";
+            cout << "1. Deposit\n2. Withdraw\n3. Check Balance\n4. View Transaction History\n5. Exit\n";
+            cout << "Choose an option: ";
+            cin >> choice;
+
+            switch (choice) {
+            case 1:
+                deposit();
+                break;
+            case 2:
+                withdraw();
+                break;
+            case 3:
+                checkBalance();
+                break;
+            case 4:
+                viewTransactionHistory();
+                break;
+            case 5:
+                cout << "Thank you for using ThebeBank. Goodbye!\n";
+                break;
+            default:
+                cout << "Invalid option. Please try again.\n";
+            }
+        } while (choice != 5);
+    }
+
+private:
+    void deposit() {
+        int amount;
+        cout << "Enter amount to deposit: ";
+        cin >> amount;
+        if (amount > 0) {
+            balance += amount;
+            transactionHistory.push_back("Deposited: " + to_string(amount));
+            cout << "Deposit successful. Your new balance is: " << balance << endl;
+        } else {
+            cout << "Invalid amount. Please enter a positive value.\n";
+        }
+    }
+
+    void withdraw() {
+        int amount;
+        cout << "Enter amount to withdraw: ";
+        cin >> amount;
+        if (amount > balance) {
+            cout << "Insufficient funds. Your balance is: " << balance << endl;
+        } else if (amount <= 0) {
+            cout << "Invalid amount. Please enter a positive value.\n";
+        } else {
+            balance -= amount;
+            transactionHistory.push_back("Withdrew: " + to_string(amount));
+            cout << "Withdrawal successful. Your new balance is: " << balance << endl;
+        }
+    }
+
+    void checkBalance() const {
+        cout << "Your current balance is: " << balance << endl;
+    }
+
+    void viewTransactionHistory() const {
+        cout << "\n********* TRANSACTION HISTORY *********\n";
+        for (const string& transaction : transactionHistory) {
+            cout << transaction << endl;
+        }
+    }
+};
+
+int main() {
+    Bank myBank;
+    int option;
+
+    cout << "********* Welcome to ThebeBank *********\n";
+    cout << "1. Sign Up\n2. Login\nChoose an option: ";
+    cin >> option;
+
+    switch (option) {
+    case 1:
+        myBank.createProfile();
+        break;
+    case 2:
+        if (myBank.userLogin()) {
+            myBank.menu();
+        }
+        break;
+    default:
+        cout << "Invalid option. Exiting...\n";
+    }
+
+    return 0;
+}
+
