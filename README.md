@@ -34,6 +34,46 @@ A secure and feature-rich banking system simulation built with C++ that demonstr
 - **File I/O** - Persistent data storage
 - **Standard Template Library** - Vectors and algorithms
 - **Time Handling** - Transaction timestamps
+thebe-bank/
+├── src/
+│ └── bank.cpp # Main application source
+├── data/
+│ ├── users.dat # User account database
+│ └── transactions.log # Transaction audit log
+└── README.md # Project documentation
+
+## 🚀 Getting Started
+
+### Prerequisites
+- C++17 compatible compiler (g++ 7+, clang 5+, MSVC 2017+)
+- Make (optional, for building)
+
+### Compilation & Execution
+```bash
+# Compile with g++
+g++ -std=c++17 -o thebe-bank bank.cpp
+
+# Run the program
+./thebe-bank
+ecurity Features
+Password Encryption: XOR encryption with complex key
+
+Input Validation: All user inputs are validated
+
+Transaction Logging: Complete audit trail of all transactions
+
+Account Protection: Minimum balance requirements
+
+📈 Future Improvements
+Graphical user interface (Qt/GTK)
+
+Network support for multi-user access
+
+Interest calculation and savings accounts
+
+Check deposit functionality
+
+Admin interface for account management
 - **Input Validation** - Robust user input handling
 
 ## 📂 Project Structure
