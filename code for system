@@ -2,177 +2,339 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include <iomanip> // For formatted output
+#include <iomanip>
+#include <limits>
+#include <ctime>
+#include <sstream>
+#include <algorithm>
+#include <cctype>
 
 using namespace std;
 
-class Bank {
+// Constants
+const string USER_DATABASE = "users.dat";
+const string TRANSACTION_LOG = "transactions.log";
+const double MAX_WITHDRAWAL = 10000.00;
+const double MIN_BALANCE = 100.00;
+
+class BankAccount {
 private:
-    string name, cellNo, address, email, password;
-    int balance = 0;
+    string accountNumber;
+    string name;
+    string phone;
+    string address;
+    string email;
+    string encryptedPassword;
+    double balance;
     vector<string> transactionHistory;
 
-    // Helper function to encrypt passwords (basic XOR encryption for demonstration)
-    string encryptPassword(const string& pwd) {
-        string encrypted = pwd;
-        for (char& c : encrypted) c ^= 0x5A; // XOR with a key
-        return encrypted;
+    // Improved encryption using stronger algorithm
+    string encrypt(const string& data) {
+        string result = data;
+        const string key = "SecureKey123!@#";
+        for (size_t i = 0; i < data.size(); ++i) {
+            result[i] = data[i] ^ key[i % key.size()];
+        }
+        return result;
     }
 
-    // Helper function to decrypt passwords
-    string decryptPassword(const string& pwd) {
-        return encryptPassword(pwd); // XOR again decrypts
+    string generateAccountNumber() {
+        static int lastAccountNumber = 1000;
+        return "TB" + to_string(++lastAccountNumber);
     }
 
-    void saveToFile() {
-        ofstream outFile("users.txt", ios::app);
-        outFile << name << " " << encryptPassword(password) << " " << cellNo
-                << " " << address << " " << email << endl;
-        outFile.close();
+    string getCurrentDateTime() {
+        time_t now = time(nullptr);
+        tm* ltm = localtime(&now);
+        char buffer[80];
+        strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", ltm);
+        return string(buffer);
     }
 
-public:
-    void createProfile() {
-        cout << "******************* Welcome to ThebeBank *****************" << endl;
-        cout << "Please enter your name: ";
-        cin >> name;
-        cout << "Please enter your cell number: ";
-        cin >> cellNo;
-        cout << "Please enter your address: ";
-        cin.ignore(); // To ignore leftover newline
-        getline(cin, address);
-        cout << "Please enter your email: ";
-        cin >> email;
-        cout << "Please enter your password: ";
-        cin >> password;
-
-        saveToFile();
-        cout << "Details saved successfully!\n";
+    void logTransaction(const string& type, double amount) {
+        stringstream ss;
+        ss << getCurrentDateTime() << " | " << accountNumber << " | " 
+           << type << " | " << fixed << setprecision(2) << amount 
+           << " | Balance: " << balance;
+        transactionHistory.push_back(ss.str());
+        
+        // Save to transaction log file
+        ofstream logFile(TRANSACTION_LOG, ios::app);
+        if (logFile.is_open()) {
+            logFile << ss.str() << endl;
+            logFile.close();
+        }
     }
 
-    bool userLogin() {
-        string inputName, inputPassword;
-        cout << "Enter your username: ";
-        cin >> inputName;
-        cout << "Enter your password: ";
-        cin >> inputPassword;
+    void saveAccount() {
+        ofstream outFile(USER_DATABASE, ios::app);
+        if (outFile.is_open()) {
+            outFile << accountNumber << "|" << name << "|" << encryptedPassword << "|"
+                   << phone << "|" << address << "|" << email << "|" 
+                   << fixed << setprecision(2) << balance << endl;
+            outFile.close();
+        }
+    }
 
-        ifstream inFile("users.txt");
-        string fileName, filePassword, fileCell, fileAddress, fileEmail;
-        bool isLoggedIn = false;
+    void updateAccount() {
+        vector<string> accounts;
+        ifstream inFile(USER_DATABASE);
+        string line;
 
-        while (inFile >> fileName >> filePassword >> fileCell >> fileAddress >> fileEmail) {
-            if (fileName == inputName && decryptPassword(filePassword) == inputPassword) {
-                name = fileName;
-                cellNo = fileCell;
-                address = fileAddress;
-                email = fileEmail;
-                isLoggedIn = true;
-                break;
+        while (getline(inFile, line)) {
+            if (line.find(accountNumber + "|") != 0) {
+                accounts.push_back(line);
             }
         }
         inFile.close();
 
-        if (isLoggedIn) {
-            cout << "Login successful. Welcome, " << name << "!\n";
-        } else {
-            cout << "Invalid username or password.\n";
+        ofstream outFile(USER_DATABASE);
+        for (const string& acc : accounts) {
+            outFile << acc << endl;
         }
-        return isLoggedIn;
+        saveAccount();
     }
 
-    void menu() {
+public:
+    BankAccount() : balance(0.0) {}
+
+    bool createAccount() {
+        cout << "\n********** ACCOUNT CREATION **********\n";
+        
+        accountNumber = generateAccountNumber();
+        
+        cout << "Enter your full name: ";
+        cin.ignore();
+        getline(cin, name);
+        
+        cout << "Enter your phone number: ";
+        getline(cin, phone);
+        
+        cout << "Enter your address: ";
+        getline(cin, address);
+        
+        cout << "Enter your email: ";
+        getline(cin, email);
+        
+        string password;
+        cout << "Create a password (min 8 chars, at least 1 number): ";
+        getline(cin, password);
+        
+        // Password validation
+        if (password.length() < 8 || 
+            !any_of(password.begin(), password.end(), ::isdigit)) {
+            cout << "Password does not meet requirements.\n";
+            return false;
+        }
+        
+        encryptedPassword = encrypt(password);
+        
+        // Initial deposit
+        cout << "Make initial deposit (minimum $" << MIN_BALANCE << "): ";
+        while (!(cin >> balance) || balance < MIN_BALANCE) {
+            cout << "Invalid amount. Minimum deposit is $" << MIN_BALANCE << ": ";
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        }
+        
+        saveAccount();
+        logTransaction("ACCOUNT CREATION", balance);
+        
+        cout << "\nAccount created successfully!\n";
+        cout << "Your account number is: " << accountNumber << "\n";
+        return true;
+    }
+
+    bool login() {
+        string inputAccount, inputPassword;
+        cout << "\n********** LOGIN **********\n";
+        cout << "Enter account number: ";
+        cin >> inputAccount;
+        cout << "Enter password: ";
+        cin >> inputPassword;
+
+        ifstream inFile(USER_DATABASE);
+        string line;
+
+        while (getline(inFile, line)) {
+            size_t pos = 0;
+            vector<string> tokens;
+            while ((pos = line.find('|')) != string::npos) {
+                tokens.push_back(line.substr(0, pos));
+                line.erase(0, pos + 1);
+            }
+            tokens.push_back(line);
+
+            if (tokens.size() >= 7 && tokens[0] == inputAccount && 
+                encrypt(inputPassword) == tokens[2]) {
+                accountNumber = tokens[0];
+                name = tokens[1];
+                encryptedPassword = tokens[2];
+                phone = tokens[3];
+                address = tokens[4];
+                email = tokens[5];
+                balance = stod(tokens[6]);
+                
+                // Load transaction history
+                ifstream logFile(TRANSACTION_LOG);
+                string logLine;
+                while (getline(logFile, logLine)) {
+                    if (logLine.find(accountNumber) != string::npos) {
+                        transactionHistory.push_back(logLine);
+                    }
+                }
+                logFile.close();
+                
+                cout << "\nLogin successful. Welcome, " << name << "!\n";
+                return true;
+            }
+        }
+        
+        cout << "Invalid account number or password.\n";
+        return false;
+    }
+
+    void showMenu() {
         int choice;
         do {
-            cout << "\n********* MAIN MENU *********\n";
-            cout << "1. Deposit\n2. Withdraw\n3. Check Balance\n4. View Transaction History\n5. Exit\n";
-            cout << "Choose an option: ";
-            cin >> choice;
+            cout << "\n********** MAIN MENU **********\n";
+            cout << "1. Deposit\n2. Withdraw\n3. Check Balance\n"
+                 << "4. View Transactions\n5. Account Details\n6. Change Password\n7. Exit\n";
+            cout << "Enter your choice: ";
+            
+            while (!(cin >> choice) || choice < 1 || choice > 7) {
+                cout << "Invalid choice. Enter 1-7: ";
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            }
 
             switch (choice) {
-            case 1:
-                deposit();
-                break;
-            case 2:
-                withdraw();
-                break;
-            case 3:
-                checkBalance();
-                break;
-            case 4:
-                viewTransactionHistory();
-                break;
-            case 5:
-                cout << "Thank you for using ThebeBank. Goodbye!\n";
-                break;
-            default:
-                cout << "Invalid option. Please try again.\n";
+                case 1: deposit(); break;
+                case 2: withdraw(); break;
+                case 3: checkBalance(); break;
+                case 4: viewTransactions(); break;
+                case 5: showAccountDetails(); break;
+                case 6: changePassword(); break;
+                case 7: cout << "Thank you for banking with us!\n"; break;
             }
-        } while (choice != 5);
+        } while (choice != 7);
     }
 
 private:
     void deposit() {
-        int amount;
-        cout << "Enter amount to deposit: ";
-        cin >> amount;
-        if (amount > 0) {
-            balance += amount;
-            transactionHistory.push_back("Deposited: " + to_string(amount));
-            cout << "Deposit successful. Your new balance is: " << balance << endl;
-        } else {
-            cout << "Invalid amount. Please enter a positive value.\n";
+        double amount;
+        cout << "Enter deposit amount: $";
+        while (!(cin >> amount) || amount <= 0) {
+            cout << "Invalid amount. Enter positive value: $";
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
         }
+
+        balance += amount;
+        updateAccount();
+        logTransaction("DEPOSIT", amount);
+        cout << "Deposit successful. New balance: $" << fixed << setprecision(2) << balance << endl;
     }
 
     void withdraw() {
-        int amount;
-        cout << "Enter amount to withdraw: ";
-        cin >> amount;
-        if (amount > balance) {
-            cout << "Insufficient funds. Your balance is: " << balance << endl;
-        } else if (amount <= 0) {
-            cout << "Invalid amount. Please enter a positive value.\n";
-        } else {
-            balance -= amount;
-            transactionHistory.push_back("Withdrew: " + to_string(amount));
-            cout << "Withdrawal successful. Your new balance is: " << balance << endl;
+        double amount;
+        cout << "Enter withdrawal amount (max $" << MAX_WITHDRAWAL << "): $";
+        while (!(cin >> amount) || amount <= 0 || amount > MAX_WITHDRAWAL) {
+            cout << "Invalid amount. Enter between $0.01 and $" << MAX_WITHDRAWAL << ": $";
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
         }
+
+        if (balance - amount < MIN_BALANCE) {
+            cout << "Insufficient funds. Minimum balance must be $" << MIN_BALANCE << endl;
+            return;
+        }
+
+        balance -= amount;
+        updateAccount();
+        logTransaction("WITHDRAWAL", amount);
+        cout << "Withdrawal successful. New balance: $" << fixed << setprecision(2) << balance << endl;
     }
 
     void checkBalance() const {
-        cout << "Your current balance is: " << balance << endl;
+        cout << "\nCurrent Balance: $" << fixed << setprecision(2) << balance << endl;
     }
 
-    void viewTransactionHistory() const {
-        cout << "\n********* TRANSACTION HISTORY *********\n";
-        for (const string& transaction : transactionHistory) {
-            cout << transaction << endl;
+    void viewTransactions() const {
+        cout << "\n********** TRANSACTION HISTORY **********\n";
+        if (transactionHistory.empty()) {
+            cout << "No transactions found.\n";
+        } else {
+            for (const string& transaction : transactionHistory) {
+                cout << transaction << endl;
+            }
         }
+    }
+
+    void showAccountDetails() const {
+        cout << "\n********** ACCOUNT DETAILS **********\n";
+        cout << "Account Number: " << accountNumber << endl;
+        cout << "Name: " << name << endl;
+        cout << "Phone: " << phone << endl;
+        cout << "Address: " << address << endl;
+        cout << "Email: " << email << endl;
+        cout << "Balance: $" << fixed << setprecision(2) << balance << endl;
+    }
+
+    void changePassword() {
+        string currentPassword, newPassword;
+        cout << "Enter current password: ";
+        cin >> currentPassword;
+        
+        if (encrypt(currentPassword) != encryptedPassword) {
+            cout << "Incorrect current password.\n";
+            return;
+        }
+        
+        cout << "Enter new password (min 8 chars, at least 1 number): ";
+        cin >> newPassword;
+        
+        if (newPassword.length() < 8 || 
+            !any_of(newPassword.begin(), newPassword.end(), ::isdigit)) {
+            cout << "Password does not meet requirements.\n";
+            return;
+        }
+        
+        encryptedPassword = encrypt(newPassword);
+        updateAccount();
+        cout << "Password changed successfully.\n";
     }
 };
 
 int main() {
-    Bank myBank;
+    BankAccount account;
     int option;
 
-    cout << "********* Welcome to ThebeBank *********\n";
-    cout << "1. Sign Up\n2. Login\nChoose an option: ";
-    cin >> option;
+    cout << "\n********** WELCOME TO THEBE BANK **********\n";
+    cout << "1. Create Account\n2. Login\n3. Exit\n";
+    cout << "Enter your choice: ";
+    
+    while (!(cin >> option) || option < 1 || option > 3) {
+        cout << "Invalid choice. Enter 1-3: ";
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    }
 
     switch (option) {
-    case 1:
-        myBank.createProfile();
-        break;
-    case 2:
-        if (myBank.userLogin()) {
-            myBank.menu();
-        }
-        break;
-    default:
-        cout << "Invalid option. Exiting...\n";
+        case 1:
+            if (account.createAccount()) {
+                account.showMenu();
+            }
+            break;
+        case 2:
+            if (account.login()) {
+                account.showMenu();
+            }
+            break;
+        case 3:
+            cout << "Thank you for visiting Thebe Bank. Goodbye!\n";
+            break;
     }
 
     return 0;
 }
-
